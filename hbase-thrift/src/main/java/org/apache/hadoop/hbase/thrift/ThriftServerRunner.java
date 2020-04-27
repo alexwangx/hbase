@@ -50,16 +50,7 @@ import org.apache.commons.cli.OptionGroup;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.HRegionInfo;
-import org.apache.hadoop.hbase.HRegionLocation;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.ServerName;
-import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.TableNotFoundException;
+import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.Append;
@@ -194,6 +185,7 @@ public class ThriftServerRunner implements Runnable {
   private Configuration conf;
   volatile TServer tserver;
   volatile Server httpServer;
+  private ChoreService choreService = null;
   private final Hbase.Iface handler;
   private final ThriftMetrics metrics;
   private final HBaseHandler hbaseHandler;
@@ -311,13 +303,23 @@ public class ThriftServerRunner implements Runnable {
     // login the server principal (if using secure Hadoop)
     securityEnabled = userProvider.isHadoopSecurityEnabled()
       && userProvider.isHBaseSecurityEnabled();
+    LOG.debug("ALEX_DEBUG securityEnabled :"+securityEnabled);
     if (securityEnabled) {
       host = Strings.domainNamePointerToHostName(DNS.getDefaultHost(
         conf.get("hbase.thrift.dns.interface", "default"),
         conf.get("hbase.thrift.dns.nameserver", "default")));
-      userProvider.login("hbase.thrift.keytab.file",
-        "hbase.thrift.kerberos.principal", host);
+//      userProvider.login("hbase.thrift.keytab.file",
+//        "hbase.thrift.kerberos.principal", host);
     }
+
+    // TODO TGT renew
+    final ScheduledChore authChore = AuthUtil.getAuthChore(conf,"hbase.thrift.keytab.file",
+            "hbase.thrift.kerberos.principal");
+    if (authChore != null) {
+      choreService = new ChoreService("THRIFT_TGT");
+      choreService.scheduleChore(authChore);
+    }
+
     this.conf = HBaseConfiguration.create(conf);
     this.listenPort = conf.getInt(PORT_CONF_KEY, DEFAULT_LISTEN_PORT);
     this.metrics = new ThriftMetrics(conf, ThriftMetrics.ThriftServerType.ONE);
@@ -405,6 +407,9 @@ public class ThriftServerRunner implements Runnable {
       }
       httpServer = null;
     }
+    if (choreService != null) {
+      choreService.shutdown();
+    }
   }
 
   private void setupHTTPServer() throws IOException {
@@ -486,6 +491,8 @@ public class ThriftServerRunner implements Runnable {
 
     // Construct correct TransportFactory
     TTransportFactory transportFactory;
+    LOG.debug("ALEX_DEBUG hbase.regionserver.thrift.framed " + conf.getBoolean(FRAMED_CONF_KEY,false));
+    LOG.debug("ALEX_DEBUG isAlwaysFramed: " + implType.isAlwaysFramed);
     if (conf.getBoolean(FRAMED_CONF_KEY, false) || implType.isAlwaysFramed) {
       if (qop != null) {
         throw new RuntimeException("Thrift server authentication"
@@ -494,16 +501,25 @@ public class ThriftServerRunner implements Runnable {
       transportFactory = new TFramedTransport.Factory(
           conf.getInt(MAX_FRAME_SIZE_CONF_KEY, 2)  * 1024 * 1024);
       LOG.debug("Using framed transport");
+      LOG.debug("ALEX_DEBUG Using framed transport.");
     } else if (qop == null) {
       transportFactory = new TTransportFactory();
+      LOG.debug("ALEX_DEBUG Using transport.");
     } else {
+      LOG.debug("ALEX_DEBUG Using saslFactory.");
       // Extract the name from the principal
       String name = SecurityUtil.getUserFromPrincipal(
         conf.get("hbase.thrift.kerberos.principal"));
+      LOG.debug("ALEX_DEBUG thrift kerberos principal: " + name);
+
       Map<String, String> saslProperties = new HashMap<String, String>();
       saslProperties.put(Sasl.QOP, qop.getSaslQop());
       saslProperties.put(Sasl.SERVER_AUTH, "true");
       TSaslServerTransport.Factory saslFactory = new TSaslServerTransport.Factory();
+      LOG.debug("ALEX_DEBUG protocol: " + name + ", host: " + host);
+      for (String key : saslProperties.keySet()) {
+        LOG.debug("ALEX_DEBUG sasla properties: key: " + key + ", value: " + saslProperties.get(key));
+      }
       saslFactory.addServerDefinition("GSSAPI", name, host, saslProperties,
         new SaslGssCallbackHandler() {
           @Override
@@ -521,6 +537,7 @@ public class ThriftServerRunner implements Runnable {
             if (ac != null) {
               String authid = ac.getAuthenticationID();
               String authzid = ac.getAuthorizationID();
+              LOG.debug("ALEX_DEBUG: authid: " + authid + ", authzid: "+ authzid);
               if (!authid.equals(authzid)) {
                 ac.setAuthorized(false);
               } else {
@@ -529,6 +546,7 @@ public class ThriftServerRunner implements Runnable {
                 LOG.info("Effective user: " + userName);
                 ac.setAuthorizedID(userName);
               }
+              LOG.debug("ALEX_DEBUG ac isAuthorized: " + ac.isAuthorized());
             }
           }
         });
@@ -561,6 +579,7 @@ public class ThriftServerRunner implements Runnable {
     // Thrift's implementation uses '0' as a placeholder for 'use the default.'
     int backlog = conf.getInt(BACKLOG_CONF_KEY, 0);
 
+    LOG.debug("ALEX_DEBUG implType:" + implType);
     if (implType == ImplType.HS_HA || implType == ImplType.NONBLOCKING ||
         implType == ImplType.THREADED_SELECTOR) {
       InetAddress listenAddress = getBindAddress(conf);

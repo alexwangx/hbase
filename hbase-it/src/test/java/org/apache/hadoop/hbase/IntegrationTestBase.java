@@ -143,7 +143,7 @@ public abstract class IntegrationTestBase extends AbstractHBaseTool {
     // Launches chore for refreshing kerberos credentials if security is enabled.
     // Please see http://hbase.apache.org/book.html#_running_canary_in_a_kerberos_enabled_cluster
     // for more details.
-    final ScheduledChore authChore = AuthUtil.getAuthChore(conf);
+    final ScheduledChore authChore = AuthUtil.getAuthChore(conf,"hbase.client.keytab.file", "hbase.client.kerberos.principal");
     if (authChore != null) {
       choreService = new ChoreService("INTEGRATION_TEST");
       choreService.scheduleChore(authChore);

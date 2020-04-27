@@ -84,18 +84,21 @@ public class AuthUtil {
    * @param conf the hbase service configuration
    * @return a ScheduledChore for renewals, if needed, and null otherwise.
    */
-  public static ScheduledChore getAuthChore(Configuration conf) throws IOException {
+  public static ScheduledChore getAuthChore(Configuration conf,String fileConfKey,String principalConfKey) throws IOException {
     UserProvider userProvider = UserProvider.instantiate(conf);
     // login the principal (if using secure Hadoop)
     boolean securityEnabled =
         userProvider.isHadoopSecurityEnabled() && userProvider.isHBaseSecurityEnabled();
+    LOG.debug("ALEX_DEBUG fileConfKey: " + fileConfKey + ", principalConfKey: " + principalConfKey);
+
     if (!securityEnabled) return null;
     String host = null;
     try {
       host = Strings.domainNamePointerToHostName(DNS.getDefaultHost(
           conf.get("hbase.client.dns.interface", "default"),
           conf.get("hbase.client.dns.nameserver", "default")));
-      userProvider.login("hbase.client.keytab.file", "hbase.client.kerberos.principal", host);
+//      userProvider.login("hbase.client.keytab.file", "hbase.client.kerberos.principal", host);
+      userProvider.login(fileConfKey, principalConfKey, host);
     } catch (UnknownHostException e) {
       LOG.error("Error resolving host name: " + e.getMessage(), e);
       throw e;
@@ -130,6 +133,7 @@ public class AuthUtil {
       protected void chore() {
         try {
           ugi.checkTGTAndReloginFromKeytab();
+          LOG.debug("ALEX_DEBUG check TGT and relogin from keytab done. ");
         } catch (IOException e) {
           LOG.error("Got exception while trying to refresh credentials: " + e.getMessage(), e);
         }

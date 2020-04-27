@@ -273,6 +273,8 @@ public class AsyncRpcChannel {
    */
   private SaslClientHandler getSaslHandler(final UserGroupInformation realTicket,
       final Bootstrap bootstrap) throws IOException {
+    LOG.debug("ALEX_DEBUG, authMethod: " + authMethod
+    +", token: "+ token.toString() + ", serverPrincipal: " + serverPrincipal);
     return new SaslClientHandler(realTicket, authMethod, token, serverPrincipal,
         client.fallbackAllowed,
         client.conf.get("hbase.rpc.protection",
@@ -696,13 +698,18 @@ public class AsyncRpcChannel {
    */
   private void handleSaslConnectionFailure(final int currRetries, final Throwable ex,
       final UserGroupInformation user) throws IOException, InterruptedException {
-    user.doAs(new PrivilegedExceptionAction<Void>() {
+      LOG.debug("ALEX_DEBUG user info :" + user.toString());
+      LOG.debug("ALEX_DEBUG currRetries :" + currRetries + ", max_sasl_retries:" +MAX_SASL_RETRIES);
+
+      user.doAs(new PrivilegedExceptionAction<Void>() {
       @Override
       public Void run() throws IOException, InterruptedException {
         if (shouldAuthenticateOverKrb()) {
           if (currRetries < MAX_SASL_RETRIES) {
             LOG.debug("Exception encountered while connecting to the server : " + ex);
             // try re-login
+            LOG.debug("ALEX_DEBUG isLoginKeytabBased : " + UserGroupInformation.isLoginKeytabBased());
+
             if (UserGroupInformation.isLoginKeytabBased()) {
               UserGroupInformation.getLoginUser().reloginFromKeytab();
             } else {

@@ -602,6 +602,11 @@ public class RpcClientImpl extends AbstractRpcClient {
       UserGroupInformation currentUser =
         UserGroupInformation.getCurrentUser();
       UserGroupInformation realUser = currentUser.getRealUser();
+      LOG.debug("ALEX_DEBUG authMethod: " + authMethod);
+      LOG.debug("ALEX_DEBUG loginUser.hasKerberosCredentials(): " + loginUser.hasKerberosCredentials());
+      LOG.debug("ALEX_DEBUG loginUser: " + loginUser.toString());
+      LOG.debug("ALEX_DEBUG currentUser: " + currentUser.toString());
+      LOG.debug("ALEX_DEBUG realUser: " + realUser.toString());
       return authMethod == AuthMethod.KERBEROS &&
           loginUser != null &&
           //Make sure user logged in using Kerberos either keytab or TGT
@@ -642,6 +647,9 @@ public class RpcClientImpl extends AbstractRpcClient {
         final int maxRetries, final Exception ex, final Random rand,
         final UserGroupInformation user)
     throws IOException, InterruptedException{
+      LOG.debug("ALEX_DEBUG user info :" + user.toString());
+      LOG.debug("ALEX_DEBUG currRetries :" + currRetries + ", max_sasl_retries:" + maxRetries);
+
       user.doAs(new PrivilegedExceptionAction<Object>() {
         @Override
         public Object run() throws IOException, InterruptedException {
@@ -652,7 +660,8 @@ public class RpcClientImpl extends AbstractRpcClient {
                 LOG.debug("Exception encountered while connecting to " +
                     "the server : " + ex);
               }
-              //try re-login
+                //try re-login
+              LOG.debug("ALEX_DEBUG isLoginKeytabBased : " + UserGroupInformation.isLoginKeytabBased());
               if (UserGroupInformation.isLoginKeytabBased()) {
                 UserGroupInformation.getLoginUser().reloginFromKeytab();
               } else {
@@ -739,6 +748,8 @@ public class RpcClientImpl extends AbstractRpcClient {
             boolean continueSasl;
             if (ticket == null) throw new FatalConnectionException("ticket/user is null");
             try {
+              LOG.debug("ALEX_DEBUG ticket info : "+ ticket.toString());
+//              ticket.checkTGTAndReloginFromKeytab();
               continueSasl = ticket.doAs(new PrivilegedExceptionAction<Boolean>() {
                 @Override
                 public Boolean run() throws IOException {

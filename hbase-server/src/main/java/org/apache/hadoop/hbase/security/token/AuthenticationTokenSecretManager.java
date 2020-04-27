@@ -231,7 +231,7 @@ public class AuthenticationTokenSecretManager
     return true;
   }
 
-  synchronized AuthenticationKey getCurrentKey() {
+  public synchronized AuthenticationKey getCurrentKey() {
     return currentKey;
   }
 

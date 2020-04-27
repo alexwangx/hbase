@@ -775,10 +775,11 @@ public final class Canary implements Tool {
     int index = parseArgs(args);
     ChoreService choreService = null;
 
+    // TODO Alex
     // Launches chore for refreshing kerberos credentials if security is enabled.
     // Please see http://hbase.apache.org/book.html#_running_canary_in_a_kerberos_enabled_cluster
     // for more details.
-    final ScheduledChore authChore = AuthUtil.getAuthChore(conf);
+    final ScheduledChore authChore = AuthUtil.getAuthChore(conf,"hbase.client.keytab.file", "hbase.client.kerberos.principal");
     if (authChore != null) {
       choreService = new ChoreService("CANARY_TOOL");
       choreService.scheduleChore(authChore);
