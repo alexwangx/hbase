@@ -78,6 +78,7 @@ public class DefaultVisibilityExpressionResolver implements VisibilityExpression
       } catch (TableNotFoundException e) {
         // Just return with out doing any thing. When the VC is not used we wont be having 'labels'
         // table in the cluster.
+        LOG.warn("'labels' table is not found. Visibility Labels feature is not used.");
         return;
       } catch (IOException e) {
         LOG.error("Error opening 'labels' table", e);
